@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#102c47">
+  <title>Ticino World — prototipo 3D</title>
+  <style>
+    :root{color-scheme:dark; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    *{box-sizing:border-box} html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#91bed5;color:white;touch-action:none}
+    canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+    .hud{position:fixed;z-index:2;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;pointer-events:none}
+    .panel{background:rgba(8,29,48,.8);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.2);border-radius:15px;padding:10px 13px;box-shadow:0 4px 22px #0003;max-width:min(76vw,390px)}
+    h1{font-size:17px;line-height:1.15;margin:0 0 4px} .small{font-size:12px;color:#dbeaf5;line-height:1.45} #status{font-size:13px;margin-top:5px;color:#fbe3a3}
+    .pill{font-size:12px;white-space:nowrap;text-align:right}.pill strong{display:block;font-size:16px}
+    .bottom{position:fixed;z-index:3;left:12px;right:12px;bottom:max(16px,env(safe-area-inset-bottom));display:flex;align-items:flex-end;justify-content:space-between;gap:12px;pointer-events:none}
+    .pad{width:152px;height:152px;position:relative;pointer-events:auto;touch-action:none;user-select:none}
+    .ctl{position:absolute;border:1px solid #ffffff77;background:#102e49c9;color:white;border-radius:15px;font-weight:800;font-size:22px;width:46px;height:46px;display:grid;place-items:center;touch-action:none;user-select:none;cursor:pointer}
+    .ctl:active,.ctl.held{background:#288bc9} .up{left:53px;top:0}.down{left:53px;bottom:0}.left{left:0;top:53px}.right{right:0;top:53px}
+    .actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px;pointer-events:auto}
+    button.action{border:1px solid #ffffff72;background:#10314eea;color:#fff;font-size:13px;font-weight:700;border-radius:12px;padding:11px 13px;cursor:pointer;max-width:172px;touch-action:manipulation}
+    button.action.primary{background:#137eb7} button.action:disabled{opacity:.45;cursor:default}button.action:active{transform:translateY(1px)}
+    #notice{position:fixed;z-index:4;left:50%;top:25%;transform:translateX(-50%);text-align:center;background:#082d47e9;border-radius:13px;padding:11px 16px;max-width:90vw;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+    #help{position:fixed;z-index:5;inset:0;background:#051a2bd9;display:grid;place-items:center;padding:20px;overflow:auto}
+    .welcome{background:#11334b;border:1px solid #ffffff55;padding:25px;border-radius:21px;width:min(100%,470px);box-shadow:0 20px 80px #0008}
+    .welcome h2{margin:0 0 9px;font-size:25px}.welcome p{font-size:14px;line-height:1.6;color:#e0edf6}
+    .welcome button{font-size:16px;background:#1686c0;border:none;color:white;padding:13px 20px;border-radius:12px;font-weight:800;cursor:pointer;width:100%}
+    #error{display:none;position:fixed;z-index:10;inset:0;background:#091b2f;color:white;padding:24px;overflow:auto;line-height:1.6}
+    @media(min-width:850px){.pad{width:175px;height:175px}.ctl{width:52px;height:52px}.up,.down{left:61px}.left,.right{top:61px}.actions button.action{font-size:14px}}
+  </style>
+</head>
+<body>
+  <div id="error"><h2>Impossibile avviare il 3D</h2><p id="errorText"></p><p>Apri il gioco con una connessione Internet e con un browser aggiornato. Su GitHub bisogna attivare Pages: il file HTML non si esegue nella schermata del codice.</p></div>
+  <div class="hud">
+    <div class="panel"><h1>🇨🇭 TICINO WORLD <span style="font-size:10px;color:#bce1f8">ALFA 0.1</span></h1><div class="small">Lungolago di Lugano · scenario dimostrativo</div><div id="status">🚶 Esplora il lungolago</div></div>
+    <div class="panel pill"><strong id="clock">--:--</strong><span id="weather">☀️ Sereno (demo)</span><div class="small">Ora reale svizzera</div></div>
+  </div>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <div class="bottom">
+    <div class="pad" aria-label="Comandi di movimento">
+      <button class="ctl up" data-key="up" aria-label="Avanti">▲</button><button class="ctl left" data-key="left" aria-label="Sinistra">◀</button>
+      <button class="ctl down" data-key="down" aria-label="Indietro">▼</button><button class="ctl right" data-key="right" aria-label="Destra">▶</button>
+    </div>
+    <div class="actions">
+      <button class="action primary" id="busButton">🚌 Sali sull'autobus</button>
+      <button class="action" id="weatherButton">🌦️ Cambia meteo (demo)</button>
+      <button class="action" id="cameraButton">📷 Cambia visuale</button>
+      <button class="action" id="helpButton">❔ Comandi</button>
+    </div>
+  </div>
+  <div id="help">
+    <div class="welcome"><h2>🌍 Benvenuto in Ticino World!</h2>
+      <p>Questa è una <strong>prima dimostrazione 3D</strong> del lungolago di Lugano, non una mappa esatta né il gioco completo. Esplora a piedi e prova a guidare l'autobus!</p>
+      <p><strong>Computer:</strong> frecce oppure W A S D per muoverti; E per salire o scendere dall'autobus. <strong>Telefono/tablet:</strong> usa le frecce e il pulsante autobus. Il gioco funziona con una connessione Internet perché carica la libreria 3D.</p>
+      <p>🕒 L'ora segue la Svizzera. 🌦️ Il meteo è una simulazione selezionabile, <strong>non</strong> il meteo reale. Per il multiplayer e il Ticino completo serviranno ulteriori sviluppi e un server.</p>
+      <button id="startButton">Inizia a esplorare 🚶</button>
+    </div>
+  </div>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+    const $=id=>document.getElementById(id);
+    const scene=new THREE.Scene(); const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.1,950);
+    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+    renderer.setPixelRatio(Math.min(devicePixelRatio,1.7)); renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.outputColorSpace=THREE.SRGBColorSpace;
+    document.body.insertBefore(renderer.domElement,document.body.firstChild);
+    const palette={ground:0x89ac72,walk:0xdbc9ad,road:0x444e5d,lake:0x398fbb};
+    const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.83,...extra});
+    const roadMat=mat(palette.road),walkMat=mat(palette.walk),grassMat=mat(palette.ground),whiteMat=mat(0xf0f4f3),darkMat=mat(0x1a384d);
+    function cube(w,h,d,m,x,y,z,parent=scene){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;parent.add(mesh);return mesh}
+    function cyl(rt,rb,h,m,x,y,z,parent=scene,sides=10){const mesh=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,sides),m);mesh.position.set(x,y,z);mesh.castShadow=true;parent.add(mesh);return mesh}
+    const ground=cube(350,.24,190,grassMat,0,-.2,-6);
+    const lake=cube(350,.11,105,mat(palette.lake,{metalness:.18,roughness:.37}),0,-.03,-76);lake.receiveShadow=false;
+    cube(350,.19,13,walkMat,0,.025,-18);cube(350,.13,15,roadMat,0,.02,0);
+    cube(350,.13,8,walkMat,0,.03,12);
+    // Simplified road markings, promenade railing and street lights.
+    for(let x=-165;x<165;x+=10){cube(4,.025,.16,whiteMat,x,.098,0);cube(.13,.65,.13,mat(0x7896a1),x,.49,-24);cube(9,.11,.13,mat(0x8499a3),x+4.5,.7,-24)}
+    const lampLights=[];const warm=mat(0xffe5ac,{emissive:0xffd281,emissiveIntensity:1});
+    for(let x=-140;x<=140;x+=28){cyl(.11,.15,5,mat(0x52646b),x,2.5,-13);cube(1.5,.12,.18,mat(0x52646b),x+.67,4.96,-13);cube(.42,.17,.36,warm,x+1.3,4.84,-13);const light=new THREE.PointLight(0xffdd9a,0,15,1.9);light.position.set(x+1.3,4.7,-13);scene.add(light);lampLights.push(light)}
+    const buildingColors=[0xf2d7a2,0xeab88f,0xf5e4c8,0xd9d5cb,0xd4dbe0,0xd9b7a1];
+    // Fictional blocks that evoke Lugano: NOT exact real buildings or streets.
+    for(let i=0;i<34;i++){const x=-165+i*10;const h=7+(i*17%13);const color=mat(buildingColors[i%buildingColors.length]);
+      cube(8.5,h,13,color,x,h/2+0.06,25);cube(9,.5,13.5,mat(i%2?0xa45443:0x686f70),x,h+.32,25);
+      for(let floor=0;floor<Math.floor((h-2)/3);floor++)for(let win=-1;win<=1;win++){cube(1.05,1.38,.08,mat(0x5b8299,{emissive:0x182b36,emissiveIntensity:.1}),x+win*2.3,2.7+floor*3,18.42)}
+    }
+    // Trees and a lakeside garden.
+    for(let x=-150;x<156;x+=16){cyl(.23,.34,2.6,mat(0x6d5642),x,1.3,-11);const foliage=new THREE.Mesh(new THREE.SphereGeometry(1.8,9,7),mat(x%3?0x488b53:0x3a7b51));foliage.position.set(x,3.6,-11);foliage.castShadow=true;scene.add(foliage)}
+    // Benches, bollards, stop, far mountains.
+    for(let x=-130;x<130;x+=38){cube(2.7,.18,.9,mat(0x8d6246),x,.9,-20);cube(2.7,.15,.15,mat(0x8d6246),x,1.4,-19.67);cube(.13,.85,.13,darkMat,x-1,.45,-20);cube(.13,.85,.13,darkMat,x+1,.45,-20)}
+    for(let i=0;i<15;i++){const shape=new THREE.ConeGeometry(17+(i*5%11),24+(i*11%23),3);const mountain=new THREE.Mesh(shape,mat(i%2?0x6f8f89:0x728e9b,{roughness:1}));mountain.rotation.y=Math.PI/4;mountain.scale.z=1.65;mountain.position.set(-180+i*25,4,-161);scene.add(mountain)}
+    cyl(.09,.09,3,mat(0x535f66),-5,1.5,7);cube(1.9,1.05,.15,mat(0x2b80a9),-5,2.65,7);
+    const signCanvas=document.createElement('canvas');signCanvas.width=256;signCanvas.height=96;const ctx=signCanvas.getContext('2d');ctx.fillStyle='#236e9a';ctx.fillRect(0,0,256,96);ctx.fillStyle='#fff';ctx.font='bold 26px sans-serif';ctx.textAlign='center';ctx.fillText('LUGANO',128,38);ctx.font='22px sans-serif';ctx.fillText('LUNGOLAGO',128,72);
+    const sign=new THREE.Mesh(new THREE.PlaneGeometry(1.8,.65),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(signCanvas),side:THREE.DoubleSide}));sign.position.set(-5,2.65,7.09);scene.add(sign);
+    // Player avatar (customizable avatar will be a later feature).
+    const player=new THREE.Group();scene.add(player);
+    cyl(.28,.31,1.05,mat(0x194b7c),0,1.0,0,player);cyl(.27,.26,.45,mat(0xe5b98e),0,1.77,0,player);
+    const hair=new THREE.Mesh(new THREE.SphereGeometry(.29,12,10),mat(0x49332a));hair.position.set(0,2.01,-.02);player.add(hair);
+    cube(.19,.66,.22,mat(0x25354a),-.19,.31,0,player);cube(.19,.66,.22,mat(0x25354a),.19,.31,0,player);
+    cube(.18,.67,.19,mat(0xe2b48b),-.39,1.04,0,player);cube(.18,.67,.19,mat(0xe2b48b),.39,1.04,0,player);
+    player.position.set(-12,.04,-17);
+    // Bus: prototype inspired by city buses; no claim to reproduce an exact TPL/ARL model.
+    const bus=new THREE.Group();scene.add(bus);bus.position.set(13,0,0);
+    cube(9.8,2.7,2.85,mat(0xe9eff0),0,1.82,0,bus);cube(9.85,.8,2.91,mat(0x267bb1),0,1.05,0,bus);
+    cube(9.15,.06,2.7,darkMat,0,3.21,0,bus);
+    for(let x=-3.7;x<4;x+=1.65){cube(1.3,.9,.04,mat(0x284f6b,{metalness:.22}),x,2.35,1.45,bus);cube(1.3,.9,.04,mat(0x284f6b,{metalness:.22}),x,2.35,-1.45,bus)}
+    cube(.06,1.5,2.25,mat(0x315b75),4.93,2.15,0,bus);
+    for(const x of [-3.1,3.1])for(const z of [-1.46,1.46]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(.59,.59,.16,16),mat(0x20282d));wheel.rotation.x=Math.PI/2;wheel.position.set(x,.64,z);bus.add(wheel);cyl(.18,.18,.18,mat(0xadb7b9),0,0,0,wheel)}
+    const destTexture=document.createElement('canvas');destTexture.width=512;destTexture.height=100;const dc=destTexture.getContext('2d');dc.fillStyle='#171e20';dc.fillRect(0,0,512,100);dc.fillStyle='#f5b851';dc.font='bold 38px monospace';dc.textAlign='center';dc.fillText('LUGANO  DEMO',256,66);
+    const dest=new THREE.Mesh(new THREE.PlaneGeometry(2.9,.55),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(destTexture),side:THREE.DoubleSide}));dest.position.set(4.96,2.85,0);dest.rotation.y=Math.PI/2;bus.add(dest);
+    const sun=new THREE.DirectionalLight(0xfff1da,2.1);sun.position.set(-22,54,-42);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-64;sun.shadow.camera.right=64;sun.shadow.camera.top=64;sun.shadow.camera.bottom=-64;scene.add(sun);
+    const ambient=new THREE.HemisphereLight(0xe8f5ff,0x627954,1.35);scene.add(ambient);
+    let weather='sun',driving=false,cameraMode=0,started=false,lastTime=performance.now(),noticeTimeout;
+    const state={up:false,down:false,left:false,right:false};
+    function showNotice(t){$('notice').textContent=t;$('notice').style.opacity='1';clearTimeout(noticeTimeout);noticeTimeout=setTimeout(()=>$('notice').style.opacity='0',2900)}
+    function setInput(k,on){if(k in state){state[k]=on;document.querySelector(`[data-key="${k}"]`)?.classList.toggle('held',on)}}
+    const keyMap={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
+    window.addEventListener('keydown',e=>{const k=keyMap[e.key]||keyMap[e.key.toLowerCase()];if(k){e.preventDefault();setInput(k,true)}if(e.key.toLowerCase()==='e'&&!e.repeat)toggleBus()});
+    window.addEventListener('keyup',e=>{const k=keyMap[e.key]||keyMap[e.key.toLowerCase()];if(k){e.preventDefault();setInput(k,false)}});
+    window.addEventListener('blur',()=>Object.keys(state).forEach(k=>setInput(k,false)));
+    for(const btn of document.querySelectorAll('[data-key]')){
+      const key=btn.dataset.key;
+      btn.addEventListener('pointerdown',e=>{e.preventDefault();btn.setPointerCapture(e.pointerId);setInput(key,true)});
+      for(const ev of ['pointerup','pointercancel','lostpointercapture'])btn.addEventListener(ev,e=>{e.preventDefault();setInput(key,false)});
+    }
+    function toggleBus(){if(!started)return;if(driving){driving=false;player.visible=true;player.position.set(bus.position.x-2,.04,bus.position.z-4);player.rotation.y=bus.rotation.y;$('busButton').textContent='🚌 Sali sull’autobus';showNotice('Sei sceso dall’autobus.');return}
+      if(player.position.distanceTo(bus.position)>11){showNotice('Avvicinati all’autobus per salire!');return}
+      driving=true;player.visible=false;$('busButton').textContent='🚶 Scendi dall’autobus';showNotice('Guida con ▲ ▼, sterza con ◀ ▶. Buon viaggio!')}
+    $('busButton').addEventListener('click',toggleBus);
+    $('weatherButton').addEventListener('click',()=>{weather=weather==='sun'?'rain':'sun';$('weather').textContent=weather==='sun'?'☀️ Sereno (demo)':'🌧️ Pioggia (demo)';showNotice('Meteo simulato: non sono dati meteorologici reali.')});
+    $('cameraButton').addEventListener('click',()=>{cameraMode=(cameraMode+1)%2;showNotice(cameraMode?'Visuale ravvicinata':'Visuale panoramica')});
+    $('helpButton').addEventListener('click',()=>{$('help').style.display='grid'});
+    $('startButton').addEventListener('click',()=>{started=true;$('help').style.display='none';showNotice('Benvenuto sul lungolago! 🚍')});
+    // Light rain with inexpensive simple line geometry, attached to camera target.
+    const rainCount=310,rainPos=new Float32Array(rainCount*6);let rainSeed=1042;const rand=()=>((rainSeed=(rainSeed*1664525+1013904223)>>>0)/4294967296);
+    const rainDrops=[];for(let i=0;i<rainCount;i++)rainDrops.push({x:rand()*70-35,y:rand()*20,z:rand()*70-35});
+    const rainGeo=new THREE.BufferGeometry();rainGeo.setAttribute('position',new THREE.BufferAttribute(rainPos,3));const rain=new THREE.LineSegments(rainGeo,new THREE.LineBasicMaterial({color:0xc9e5f2,transparent:true,opacity:.52}));scene.add(rain);
+    const camTarget=new THREE.Vector3();const camDesired=new THREE.Vector3();
+    let speed=0,walkTime=0,dayUpdate=0;
+    function swissTime(){const d=new Date();const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Zurich',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(d);const h=Number(parts.find(p=>p.type==='hour').value);const m=Number(parts.find(p=>p.type==='minute').value);$('clock').textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;return h+m/60}
+    function animate(now){requestAnimationFrame(animate);let dt=Math.min((now-lastTime)/1000,.05);lastTime=now;if(!started)return;
+      const tr=driving?bus:player;
+      if(driving){let desired=(Number(state.up)-Number(state.down))*10.8;speed=THREE.MathUtils.damp(speed,desired,dt*3.2,dt);
+        if(state.left||state.right)bus.rotation.y+=(Number(state.right)-Number(state.left))*dt*.75*(speed>=0?1:-1);
+        const nx=bus.position.x+Math.cos(bus.rotation.y)*speed*dt,nz=bus.position.z-Math.sin(bus.rotation.y)*speed*dt;
+        if(Math.abs(nx)<169&&Math.abs(nz)<6.2){bus.position.x=nx;bus.position.z=nz}else speed=0;
+        $('status').textContent=`🚌 Autobus demo · ${Math.round(Math.abs(speed)*5)} km/h · frecce per guidare`;
+      }else{
+        const x=Number(state.right)-Number(state.left),z=Number(state.down)-Number(state.up),len=Math.hypot(x,z);
+        if(len){const s=5.5*dt/len;player.position.x=THREE.MathUtils.clamp(player.position.x+x*s,-168,168);player.position.z=THREE.MathUtils.clamp(player.position.z+z*s,-21,15);player.rotation.y=Math.atan2(x,-z);walkTime+=dt*10;player.children[3].rotation.x=Math.sin(walkTime)*.22;player.children[4].rotation.x=-Math.sin(walkTime)*.22;}
+        $('status').textContent=player.position.distanceTo(bus.position)<11?'🚶 Sei vicino all’autobus: puoi salire':'🚶 Esplora il lungolago';
+      }
+      const target=driving?new THREE.Vector3(bus.position.x,1.8,bus.position.z):new THREE.Vector3(player.position.x,1.25,player.position.z);
+      if(driving){const offs=cameraMode?new THREE.Vector3(-2.1,3.8,0):new THREE.Vector3(-12,8,13);offs.applyAxisAngle(new THREE.Vector3(0,1,0),bus.rotation.y);camDesired.copy(target).add(offs)}
+      else{camDesired.copy(target).add(new THREE.Vector3(cameraMode?0:0,cameraMode?4:7,cameraMode?7:13))}
+      camera.position.lerp(camDesired,Math.min(1,dt*3.2));camTarget.lerp(target,Math.min(1,dt*4));camera.lookAt(camTarget);
+      if(now-dayUpdate>11000||dayUpdate===0){dayUpdate=now;const h=swissTime();const daylight=Math.max(.1,Math.min(1,(h-5.5)/2,(21-h)/2));sun.intensity=.15+1.95*daylight;ambient.intensity=.3+1.05*daylight;scene.background=new THREE.Color().setHSL(.56,.42,.10+.65*daylight);scene.fog=new THREE.Fog(scene.background,105,340);lampLights.forEach(l=>l.intensity=daylight<.3?1.6:0)}
+      rain.visible=weather==='rain';if(weather==='rain'){const p=rainGeo.attributes.position;for(let i=0;i<rainCount;i++){const drop=rainDrops[i];drop.y-=dt*18;if(drop.y<0)drop.y=18;const bx=target.x+drop.x,bz=target.z+drop.z;p.setXYZ(i*2,bx,drop.y,bz);p.setXYZ(i*2+1,bx-.14,drop.y-.8,bz)}p.needsUpdate=true}
+      renderer.render(scene,camera)
+    }
+    window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+    swissTime();camera.position.set(-12,8,-3);camera.lookAt(player.position);requestAnimationFrame(animate);
+  </script>
+  <script>window.addEventListener('error',e=>{if(e.message&&(/module|WebGL|three/i.test(e.message))) {document.getElementById('errorText').textContent=e.message;document.getElementById('error').style.display='block'}});window.addEventListener('unhandledrejection',e=>{document.getElementById('errorText').textContent=String(e.reason);document.getElementById('error').style.display='block'});</script>
+</body>
+</html>
